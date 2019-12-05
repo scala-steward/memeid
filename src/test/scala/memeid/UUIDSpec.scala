@@ -3,7 +3,11 @@ package memeid
 import java.util.{UUID => JUUID}
 
 import cats._
+import cats.data._
+import cats.effect._
 import cats.instances.all._
+import cats.syntax.order._
+import cats.syntax.parallel._
 
 import org.specs2.ScalaCheck
 import org.specs2.mutable.Specification
@@ -145,4 +149,26 @@ class UUIDSpec extends Specification with ScalaCheck {
 
   }
 
+}
+
+class V1Spec extends Specification with ScalaCheck {
+  implicit val cs: ContextShift[IO] = IO.contextShift(scala.concurrent.ExecutionContext.global)
+  implicit val clk: Clock[IO]       = Clock.create[IO]
+
+  "V1 constructor" should {
+    "create monotonically increasing UUIDs" in {
+      val test = (for {
+        first <- UUID.v1[IO]
+        last  <- UUID.v1[IO]
+      } yield first < last).unsafeRunSync
+
+      test must be equalTo (true)
+    }
+
+    "not generate the same UUID twice" in {
+      val uuids =
+        NonEmptyList.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10).parTraverse(_ => UUID.v1[IO]).unsafeRunSync
+      uuids.toList.toSet.size must be equalTo (uuids.size)
+    }
+  }
 }
